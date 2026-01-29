@@ -1,0 +1,11 @@
+[Oikotie]
+BaseURL = "https://asunnot.oikotie.fi/{category}?pagination={page}"
+
+[Oikotie.Categories]
+[Oikotie.Categories.Vuokra]
+Asunnot = "vuokra-asunnot"
+
+[Oikotie.Categories.Myytavat]
+asunnot = "myytavat-asunnot"
+uudisasunnot = "myytavat-uudisasunnot"
+
