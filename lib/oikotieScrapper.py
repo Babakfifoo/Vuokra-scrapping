@@ -6,6 +6,7 @@ from typing import Dict
 # The contact information must be removed.
 # TODO: implement the texts.
 # TODO: implement the building information scrappers. https://asunnot.oikotie.fi/talo
+# TODO: implement the GDPR compliancy. Use th ecode you made before.
 
 def convert_xml_row_to_dict(html_snippet: str, info_type: str) -> Dict[str, str] | None:
     try:
@@ -17,7 +18,7 @@ def convert_xml_row_to_dict(html_snippet: str, info_type: str) -> Dict[str, str]
             .replace("\xa0", "")
         )
 
-        return (key, value)
+        return {key: value}
     except Exception as e:
         print(e)
         pass
