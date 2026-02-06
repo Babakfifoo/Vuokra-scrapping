@@ -15,24 +15,35 @@ import json
 import logging
 import time
 
-SELECTOR = ".cards-v3__card.ng-star-inserted"
-TODAY =  str(date.today())
+from icecream import ic
+
 with open("lib/Settings.toml", "rb") as f:
     URL_SETTING: Dict[str, Any] = tomllib.loads(f.read().decode("utf-8"))["Oikotie"]
 
 
-# %%
-def get_ad_data(url: str) -> Dict:
-    return {}
+SELECTOR = ".cards-v3__card.ng-star-inserted"
+TODAY = str(date.today())
+VUAKRA_AD_TYPE: str | None = (
+    URL_SETTING.get("Categories", {}).get("Vuokra", {}).get("Asunnot", None)
+)
+
+
 
 def store_ad_pages(ads: List[str]) -> None:
     for ad_url in ads:
         if len(ad_url) <= 40:
             continue
-        with open(Path(f"data/htmls/{TODAY}-{ad_url.split('/')[-1]}.html"), mode="w", encoding="utf-8") as f:
+        with open(
+            Path(f"data/htmls/{TODAY}-{ad_url.split('/')[-1]}.html"),
+            mode="w",
+            encoding="utf-8",
+        ) as f:
             html_str = requests.get(ad_url).text
             f.write(html_str)
+            # The scrip politeness
+            time.sleep(0.1)
     return
+
 
 class HTMLParser:
     def get_html_string(self, dp: str) -> str:
@@ -54,7 +65,7 @@ class HTMLParser:
         else:
             logging.info(f"No Meta found for this webpage.")
         return json.loads(
-            script_content.replace("var otAsunnot=", "").split(";")[0]
+            script_content.split(";window")[0].split("=")[1]
         ).get("analytics")
 
     def get_published_date(self, dp) -> str:
@@ -68,8 +79,42 @@ class webpageExtractor:
         self.BaseURL: str = URL_SETTING.get("BaseURL", "")
         self.list_of_pages: List[str] = []
         self.HTMLParser = HTMLParser()
+        # this is to make sure the if confing is properly set.
+        self.ad_type: str = VUAKRA_AD_TYPE if VUAKRA_AD_TYPE else "vuokra-asunnot"
 
-    def get_todays_ads_links(self, ad_type="vuokra-asunnot") -> List[str]:
+    def get_todays_ads_links(self, ad_type=None) -> List[str]:
+        """
+        Retrieve ad links from paginated search results until ads older than yesterday are reached.
+
+        Parameters
+        ----------
+        ad_type : str, optional
+            The advertisement category to query (default "vuokra-asunnot").
+
+        Returns
+        -------
+        List[str]
+            A list of ad links collected from pages that contain ads published in past 24 hours
+
+        Raises
+        ------
+        ValueError
+            If the published date string returned by HTMLParser.get_published_date cannot be parsed
+            with the expected format ("%Y-%m-%d %H:%M:%S").
+
+        Notes
+        -----
+        - The method relies on self.get_page_ads and self.HTMLParser.get_published_date.
+        - Pagination is capped at 99 pages to avoid infinite loops.
+
+        Example
+        -------
+        links = self.get_todays_ads_links()  # returns links for ads from today and yesterday
+        """
+        if not ad_type:
+            ad_type:str = self.ad_type
+            
+        
         threshold: int = 1
         ad_links: List[str] = []
         while threshold < 100:
@@ -83,6 +128,8 @@ class webpageExtractor:
             input_date = dt_obj.date()
             ad_links += obtained_links
             # 4. Compare with today
+            # Here we parse the ads util we reach the day before yesterday,
+            # This is to obtain all ads published yesterday.
             if input_date < (date.today() - timedelta(days=1)):
                 break
             # adding to the page
@@ -90,7 +137,7 @@ class webpageExtractor:
 
         return ad_links
 
-    def get_page_ads(self, ad_type="vuokra-asunnot", page: int = 1) -> List[str]:
+    def get_page_ads(self, ad_type=None, page: int = 1) -> List[str]:
         """
         Retrieve ad URLs from a listing page.
         Parameters
@@ -115,16 +162,19 @@ class webpageExtractor:
         or waiting fails. Requires that self.driver and base_url are defined on the instance.
         """
 
+        if not ad_type:
+            ad_type:str = self.ad_type
+        
         self.driver.get(self.BaseURL.format(category=ad_type, page=page))
         self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         self.driver.implicitly_wait(10)
         WebDriverWait(self.driver, 10).until(
-            lambda d: d.execute_script('return document.readyState') == 'complete'
+            lambda d: d.execute_script("return document.readyState") == "complete"
         )
         time.sleep(2)
 
         # Additional wait for complete rendering
-        with open("test.html", mode = "w", encoding="utf-8") as f:
+        with open("test.html", mode="w", encoding="utf-8") as f:
             f.write(self.driver.page_source)
 
         elements: List[WebElement] = self.driver.find_elements(By.XPATH, "//a[@href]")

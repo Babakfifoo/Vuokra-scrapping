@@ -1,5 +1,5 @@
 [Oikotie]
-BaseURL = "https://asunnot.oikotie.fi/{category}?pagination={page}"
+BaseURL = "https://asunnot.oikotie.fi/{category}?pagination={page}&sortBy=published_sort_desc&cardType=101"
 
 [Oikotie.Categories]
 [Oikotie.Categories.Vuokra]
