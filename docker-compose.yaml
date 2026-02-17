@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: oikotie
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata  # Recommended: use subdirectory
+    ports:
+      - "5000:5432"
+    volumes:
+      - ./data/postgres-data:/var/lib/postgresql/data:Z
+      - ./app/services/init.sql:/docker-entrypoint-initdb.d/init.sql:ro  # Read-only
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # python-app:
+  #   image: uv:python3.14-alpine
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: scrapper
+  #   environment:
+  #     # Database connection settings
+  #     DB_HOST: postgres
+  #     DB_PORT: 5432
+  #     DB_NAME: ${POSTGRES_DB:-appdb}
+  #     DB_USER: ${POSTGRES_USER:-appuser}
+  #     DB_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+  #   volumes:
+  #     # Application code (if you want live updates during development)
+  #     - ./app:/app
+  #     # Persistent log storage - update path to your Linux directory
+  #     - /path/to/your/logs:/app/logs
+  #   networks:
+  #     - app-network
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   # Manual trigger: no automatic command, use docker exec to run
+  #   # Remove this if your app should run continuously
+  #   command: tail -f /dev/null
+  #   restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
