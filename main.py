@@ -1,5 +1,8 @@
+from app.services import ingest
+
+
 def main():
-    print("Hello from 04-oskari!")
+    ingest.ingest_to_files()
 
 
 if __name__ == "__main__":
