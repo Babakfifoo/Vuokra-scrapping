@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import date
+from datetime import date, datetime
 
 import dotenv
 import pandas as pd
@@ -15,7 +15,7 @@ dotenv.load_dotenv()
 
 systemTools.setup_logging()
 # Get today's date
-today = date.today()
+today = datetime.now()
 db_config = {
     "host": "localhost",
     "database": os.getenv("POSTGRES_DB"),
@@ -29,8 +29,8 @@ def ingest_to_files():
     """Ingest data from Oikotie
     This script ingests data from Vuokra.fi and saves it to a file.
     """
-    # Extract_links()
-    # webpageExtractor.store_missing_html()
+    Extract_links()
+    webpageExtractor.store_missing_html()
     DataProcessor.Process_HTMLs()
 
 
