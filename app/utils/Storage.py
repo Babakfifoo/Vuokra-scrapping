@@ -1,6 +1,5 @@
 from typing import Any, Dict, List
 
-import psycopg2
 from psycopg2.extras import RealDictCursor
 
 
@@ -29,18 +28,3 @@ def mark_as_processed(conn, success: bool = True):
             (True,),
         )
     conn.commit()
-
-
-def package_today_htmls():
-    # TODO A function that puts all htmls files of today into a gz package.
-    pass
-
-
-def parse_jsons_to_pandas():
-    # TODO A function to parse and convert all json files into rows of data for the database.
-    pass
-
-
-def insent_records():
-    # TODO a function that insert the parsed rows.
-    pass
