@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 import pandas as pd
 import psycopg2
 import requests
+
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
@@ -17,7 +18,7 @@ from sqlalchemy import create_engine
 
 from . import Storage, setupDriver
 
-with open("./Settings.toml", "rb") as f:
+with open("./app/utils/URLSettings.toml", "rb") as f:
     URL_SETTING: Dict[str, Any] = tomllib.loads(f.read().decode("utf-8"))["Oikotie"]
 
 HTML_DIR = Path("./data/html")
@@ -42,7 +43,13 @@ class webpageExtractor:
         self.conn_str: str = f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@localhost:5000/{os.getenv('POSTGRES_DB')}"
 
     def get_ads_and_update(self) -> None:
-        links = self.get_todays_ads_links()
+        """Get the apps and update the links ledger
+        This function basically initiaates the scrapping process.
+        It runs all necessary functions to scrap and store the links.
+        # TODO This function needs to be moved to ingestion part. The pipeline is not clean here.
+        
+        """
+        links: List[List[Any]] = self.get_todays_ads_links()
         self.append_link_table(links)
         return
 
@@ -69,18 +76,26 @@ class webpageExtractor:
         -------
         links = self.get_todays_ads_links()  # returns links for ads from today and yesterday
         """
-
+        # TODO: Add a dynamic datetime for each page.
+        
         threshold: int = 1
         all_index: List[int] = []
         all_links: List[str] = []
+        
         with psycopg2.connect(self.conn_str) as conn:
             link1, link2 = get_first_two_links_from_yesterdays_ads(conn=conn)
         while threshold < 99:
+            # WARNING: Do not store the links until the whole proces is completed
+            # If the links are stored before reaching last checkpoints,
+            # the next time the process is running will miss them.
             logging.info(f"Processing page {threshold}")
             obtained_links: List[str] = self.get_page_ads(page=threshold)
             all_index += [threshold] * len(obtained_links)
             all_links.extend(obtained_links)
-            # validate_link1
+            
+            # TODO Make validation a function
+            # The function gets the links, and All link list to generate index.
+            # if the validation failes, it will bypass the return statement.
             link1_validated: bool = link1 in all_links
             link2_validated: bool = link2 in all_links
 
@@ -130,10 +145,11 @@ class webpageExtractor:
         time.sleep(2)
 
         # Additional wait for complete rendering
-        with open("test.html", mode="w", encoding="utf-8") as f:
+        with open("./data/cache/temp.html", mode="w", encoding="utf-8") as f:
             f.write(self.driver.page_source)
 
         elements: List[WebElement] = self.driver.find_elements(By.XPATH, "//a[@href]")
+        # TODO make this a function for extracting ad links.
         links: List[str] = [
             elem.get_attribute("href")
             for elem in elements
@@ -146,6 +162,16 @@ class webpageExtractor:
         return ads
 
     def append_link_table(self, links_idx_lst: List[List[Any]]) -> None:
+        """Append the scrapped links to the links table
+        This function adds the obtained links from the search pages. 
+        These links then stored to keep a ledger of all links, their processing
+        stages and the checkpoints. 
+
+        Parameters
+        ----------
+        links_idx_lst : List[List[Any]]
+            _description_
+        """        
         link_df = pd.DataFrame({"page": links_idx_lst[0], "link": links_idx_lst[1]})
         link_df["accessed_at"] = date.today()
         engine = create_engine(self.conn_str)
@@ -157,8 +183,10 @@ class webpageExtractor:
 def get_first_two_links_from_yesterdays_ads(conn) -> List[str]:
     """get first two linkf of yesterday
 
-    This function gets the first two links of yesterday ads in order to scrap
-    the ads that are published within the past 24 hours.
+    This function gets the first two links of last batch of processing.
+
+    We use the last batch so itf the function is executed in the same day,
+    it will only get the new links. Otherwise, execution in 24 hours interval will yield the same results.
 
     Parameters
     ----------
@@ -175,8 +203,7 @@ def get_first_two_links_from_yesterdays_ads(conn) -> List[str]:
     cursor.execute("""
         SELECT link
         FROM links
-        WHERE DATE(accessed_at) = CURRENT_DATE - INTERVAL '1 day'
-        ORDER BY page ASC
+        ORDER BY accessed_at DESC, page ASC
         LIMIT 2
     """)
     result = [row[0] for row in cursor.fetchall()]
