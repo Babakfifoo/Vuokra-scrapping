@@ -11,3 +11,10 @@ def setup_logging(level: str = "INFO") -> logging.Logger:
         force=True,
     )
     return logging.getLogger(__name__)
+
+
+
+def telegram_logging():
+    # TODO greate a telegram channel for iunforming the admin of changes and errors
+    raise NotImplementedError
+    pass
