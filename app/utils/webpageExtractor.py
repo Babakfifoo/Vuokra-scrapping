@@ -4,6 +4,7 @@ import time
 import tomllib
 from datetime import datetime
 from typing import Any, Dict, List
+import sqlite3
 from uuid_extensions import uuid7str
 import pandas as pd
 import requests
@@ -11,10 +12,11 @@ from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
-from . import LEDGER_FP, HTML_DIR, JSON_DIR
+from . import LEDGER_FP, HTML_DIR, JSON_DIR, LEDGER_DB
 from . import Storage, setupDriver
 from app.services import DataExtractor
 import json
+
 with open("./app/utils/URLSettings.toml", "rb") as f:
     URL_SETTING: Dict[str, Any] = tomllib.loads(f.read().decode("utf-8"))["Oikotie"]
 
@@ -158,12 +160,22 @@ class webpageExtractor:
 
     def construct_ledger_df(self, links_idx_lst: List[List[Any]]) -> pd.DataFrame:
         link_df = pd.DataFrame({"page": links_idx_lst[0], "link": links_idx_lst[1]})
-        link_df["accessed_at"] = datetime.now()
+        link_df["accessed_at"] = datetime.now().strftime(format="%Y-%m-%d %H:%M:%S")
         link_df["cardid"] = link_df["link"].str.split("/").str[-1]
         link_df["id"] = [uuid7str() for _ in range(len(link_df))]
         link_df["parsed"] = False
         link_df["visibility_parsed"] = False
-        return link_df[["id", "cardid", "accessed_at","page", "link", "parsed", "visibility_parsed"]]
+        return link_df[
+            [
+                "id",
+                "cardid",
+                "accessed_at",
+                "page",
+                "link",
+                "parsed",
+                "visibility_parsed",
+            ]
+        ]
 
     def append_link_table(self, links_idx_lst: List[List[Any]]) -> None:
         """Append the scrapped links to the links table
@@ -177,7 +189,10 @@ class webpageExtractor:
             _description_
         """
         link_df: pd.DataFrame = self.construct_ledger_df(links_idx_lst)
-        link_df.to_csv(LEDGER_FP, mode="a", header=False, index=False)
+        with sqlite3.connect(LEDGER_DB) as con:
+            link_df.to_sql(name="ledger", con=con, if_exists="append", index=False)
+        # validate if the table is there:
+
         return
 
 
@@ -199,10 +214,21 @@ def get_first_two_links_from_yesterdays_ads() -> List[str]:
     List[str]
         two links
     """
-    ledger = pd.read_csv(LEDGER_FP)
-    last_date = ledger.accessed_at.max()
-    ledger_latest: pd.DataFrame = ledger[ledger.accessed_at == last_date]
-    result: List[str] = ledger_latest.sort_values("id").head(2)["link"].to_list()
+    with sqlite3.connect(LEDGER_DB) as con:
+        result: List[Any] = (
+            pd.read_sql(
+                """
+                    SELECT * FROM ledger
+                    ORDER BY accessed_at DESC, page ASC
+                    LIMIT 2
+                """,
+                con,
+            )
+            .sort_values("id")
+            .head(2)["link"]
+            .to_list()
+        )
+
     if len(result) < 2:
         logging.warning("Less than 2 links found for yesterday's ads.")
         return ["", ""]
@@ -239,21 +265,24 @@ def store_missing_html() -> None:
     """
 
     missing_ledger: pd.DataFrame = Storage.get_unprocessed_rows()
-    parsed_ids = []
     for i, row in missing_ledger.iterrows():
         # Process the link
         # Index 10 ensures that only date is extracted and no other information is in there.
-        date_str = row.get("accessed_at", datetime.today().strftime("%Y-%m-%d"))[:10]
+        date_str = str(row.get("accessed_at", datetime.today().strftime("%Y-%m-%d")))[
+            :10
+        ]
         html_str = download_webpage(row["link"])
         if html_str:
-            fname:str = date_str + "-" + row["link"].split("/")[-1]
+            fname: str = date_str + "-" + row["link"].split("/")[-1]
             soup = BeautifulSoup(html_str, "html.parser")
             data = DataExtractor.compile_record_json(soup)
 
             with open(JSON_DIR / (fname + ".json"), mode="w") as f:
                 f.write(json.dumps(data, ensure_ascii=False).replace("\t", ""))
                 logging.debug(f"Stored {fname}")
-                parsed_ids.append(row["id"])
+                Storage.mark_as_processed(row["id"])
 
         time.sleep(0.1)
-    Storage.mark_as_processed(ids=parsed_ids)
+
+
+# %%

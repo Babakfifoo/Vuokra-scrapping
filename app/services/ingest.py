@@ -31,7 +31,6 @@ def ingest_to_files():
     """
     Extract_links()
     webpageExtractor.store_missing_html()
-    DataProcessor.Process_HTMLs()
 
 
 def Extract_links():
