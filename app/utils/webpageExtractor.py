@@ -16,7 +16,8 @@ from . import LEDGER_FP, HTML_DIR, JSON_DIR, LEDGER_DB
 from . import Storage, setupDriver
 from app.services import DataExtractor
 import json
-
+import uuid6
+from urllib.parse import unquote
 with open("./app/utils/URLSettings.toml", "rb") as f:
     URL_SETTING: Dict[str, Any] = tomllib.loads(f.read().decode("utf-8"))["Oikotie"]
 
@@ -25,6 +26,145 @@ SELECTOR = ".cards-v3__card.ng-star-inserted"
 VUAKRA_AD_TYPE: str | None = (
     URL_SETTING.get("Categories", {}).get("Vuokra", {}).get("Asunnot", None)
 )
+
+
+def load_site_config(path: str = "app/configs.toml") -> dict:
+    """Configuration loader"""
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+def get_and_insert_listings(session_config: dict) -> None:
+    """gathering and storing the links to listing based on the configurations
+
+    Parameters
+    ----------
+    session_config : 
+        A dictionary containing the configuration for the session, including the base URL and card type.
+    """    
+    last_links = get_last_two_links(card_type=session_config["cardType"])
+    for page in range(1, 100):
+        logging.info(f"Scraping page {page}")
+        get_listings_page(driver = driver, page=page, session_config=session_config)
+        time.sleep(2)
+        links = extract_listing_links(driver)
+
+        last_links = [link for link in last_links if link not in links]
+        if len(last_links) == 0:
+            print(f"All last links found on page {page}. Stopping.")
+            insert_rows_to_ledger(links, page, session_config)
+            break
+
+        if len(links) == 0:
+            print(f"No links found on page {page}. Stopping.")
+            break
+        insert_rows_to_ledger(links, page, session_config)
+
+def get_listings_page(driver, page: int, session_config):
+    """Get the listings page for a given page number."""
+    config = load_site_config()
+    url = session_config["base_url"].format(page=page)
+    driver.get(url)
+    WebDriverWait(driver, 10).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
+    )
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    WebDriverWait(driver, 10).until(
+        lambda d: d.execute_script("return document.readyState") == "complete"
+    )
+    return 
+
+def extract_listing_links(driver) -> List[str]:
+    """Extracts listing links from the current page.
+
+    Parameters
+    ----------
+    driver : selenium.webdriver.Chrome
+        The Selenium WebDriver instance.
+
+    Returns
+    -------
+    List[str]
+        A list of extracted listing links.
+    """
+    elements = driver.find_elements(By.XPATH, "//a[@href]")
+    links: List[str] = [
+        elem.get_attribute("href")
+        for elem in elements
+        if elem.get_attribute("href") is not None
+    ]  # type: ignore
+
+    ads: List[str] = [s for s in links if s.split("/")[-1].isdigit()]
+    return ads
+
+
+def generate_row(link: str, page: int, date_time: str, session_config) -> dict:
+    """Generate a row for the ledger table based on the given link.
+
+    Parameters
+    ----------
+    link : str
+        The listing link.
+    page : int
+        The page number.
+    date_time : str
+        The date and time of the extraction.
+
+    Returns
+    -------
+    dict
+        A dictionary representing a row for the ledger table.
+    """
+    return {
+        "id": str(uuid6.uuid7()),
+        "kunta": unquote(link.split("/")[-2]),
+        "cardType": session_config["cardType"],
+        "cardid": int(link.split("/")[-1]),
+        "accessed_at": date_time,
+        "page": page,
+        "link": link,
+        "parsed": 0,
+    }
+
+def insert_single_row(row: dict, db_path: str = "./app/data/listings.sqlite3") -> None:
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            """
+            INSERT INTO ledger (id, kunta, cardid,cardType, accessed_at, page, link, parsed)
+            VALUES (:id, :kunta, :cardid, :cardType, :accessed_at, :page, :link, :parsed)
+            ON CONFLICT(link) DO NOTHING
+            """,
+            {**row},
+        )
+        con.commit()
+
+def insert_rows_to_ledger(links: List[str], page: int, session_config, db_path: str = "./app/data/listings.sqlite3") -> None:
+    """Insert multiple rows into the ledger table based on the given links.
+
+    Parameters
+    ----------
+    links : List[str]
+        A list of listing links.
+    page : int
+        The page number from which the links were extracted.
+    session_config : dict
+        The configuration for the session.
+    db_path : str, optional
+        The path to the SQLite database file, by default "./app/data/listings.sqlite3".
+    """
+    with sqlite3.connect(db_path) as con:
+        parsing_dt = datetime.now().isoformat()
+        for link in links:
+            row = generate_row(link, page, parsing_dt, session_config)
+            con.execute(
+                """
+                INSERT INTO ledger (id, kunta, cardid, cardType, accessed_at, page, link, parsed)
+                VALUES (:id, :kunta, :cardid, :cardType, :accessed_at, :page, :link, :parsed)
+                ON CONFLICT(link) DO NOTHING
+                """,
+                {**row},
+            )
+        con.commit()
+
 
 
 class webpageExtractor:
@@ -206,8 +346,7 @@ def get_first_two_links_from_yesterdays_ads() -> List[str]:
 
     Parameters
     ----------
-    conn : psycopg2.extensions.connection
-         a connection to the database where the links are stored
+    None
 
     Returns
     -------

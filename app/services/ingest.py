@@ -16,14 +16,6 @@ dotenv.load_dotenv()
 systemTools.setup_logging()
 # Get today's date
 today = datetime.now()
-db_config = {
-    "host": "localhost",
-    "database": os.getenv("POSTGRES_DB"),
-    "user": os.getenv("POSTGRES_USER"),
-    "password": os.getenv("POSTGRES_PASSWORD"),
-    "port": 5000,
-}
-
 
 def ingest_to_files():
     """Ingest data from Oikotie

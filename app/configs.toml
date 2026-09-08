@@ -1,0 +1,51 @@
+[listing_types.Vuokrattavat]
+
+[listing_types.Vuokrattavat.vuokra-asunnot]
+base_url = "https://asunnot.oikotie.fi/vuokra-asunnot?pagination={page}&sortBy=published_sort_desc&cardType=101&secondarySearchType=1"
+listing_url_template = "https://asunnot.oikotie.fi/vuokra-asunnot/{kunta}/{cardid}"
+cardType = 101
+page_param = "page"
+
+[listing_types.vuokrattavat-loma-asunnot]
+base_url = "https://asunnot.oikotie.fi/vuokrattavat-loma-asunnot?pagination={page}&sortBy=published_sort_desc&cardType=103&secondarySearchType=1"
+listing_url_template = "https://asunnot.oikotie.fi/vuokrattavat-loma-asunnot/{kunta}/{cardid}"
+cardType = 103
+page_param = "page"
+
+[listing_types.Vuokrattavat.vuokrattavat-autotallit]
+base_url = "https://asunnot.oikotie.fi/vuokrattavat-autotallit?pagination={page}&sortBy=published_sort_desc&cardType=109&secondarySearchType=1"
+listing_url_template = "https://asunnot.oikotie.fi/vuokrattavat-autotallit/{kunta}/{cardid}"
+cardType = 109
+page_param = "page"
+
+[listing_types.Myytavat]
+
+[listing_types.Myytavat.myytavat-asunnot]
+base_url = "https://asunnot.oikotie.fi/myytavat-asunnot?pagination={page}&sortBy=published_sort_desc&cardType=100&secondarySearchType=1"
+listing_url_template = "https://asunnot.oikotie.fi/myytavat-asunnot/{kunta}/{cardid}"
+cardType = 100
+page_param = "page"
+
+[listing_types.Myytavat.myytavat-loma-asunnot]
+base_url = "https://asunnot.oikotie.fi/myytavat-loma-asunnot?pagination={page}&sortBy=published_sort_desc&cardType=102&secondarySearchType=1"
+listing_url_template = "https://asunnot.oikotie.fi/myytavat-loma-asunnot/{kunta}/{cardid}"
+cardType = 102
+page_param = "page"
+
+[listing_types.Myytavat.myytavat-tontit]
+base_url = "https://asunnot.oikotie.fi/myytavat-tontit?pagination={page}&sortBy=published_sort_desc&cardType=104&secondarySearchType=1"
+listing_url_template = "https://asunnot.oikotie.fi/myytavat-tontit/{kunta}/{cardid}"
+cardType = 104
+page_param = "page"
+
+[listing_types.Myytavat.myytavat-autotallit]
+base_url = "https://asunnot.oikotie.fi/myytavat-autotallit?pagination={page}&sortBy=published_sort_desc&cardType=108&secondarySearchType=1"
+listing_url_template = "https://asunnot.oikotie.fi/myytavat-autotallit/{kunta}/{cardid}"
+cardType = 108
+page_param = "page"
+
+[listing_types.Myytavat.myytavat-metsatilat-ja-maatilat]
+base_url = "https://asunnot.oikotie.fi/myytavat-metsatilat-ja-maatilat?pagination={page}&sortBy=published_sort_desc&cardType=107&secondarySearchType=1"
+listing_url_template = "https://asunnot.oikotie.fi/myytavat-metsatilat-ja-maatilat/{kunta}/{cardid}"
+cardType = 107
+page_param = "page"

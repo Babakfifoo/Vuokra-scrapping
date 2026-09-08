@@ -1,67 +1,115 @@
 # %%
-from lib import By, WebDriverWait, EC
+%load_ext autoreload
+%autoreload 2
 import json
 import requests
-from lib.oikotieScrapper import convert_xml_row_to_dict
-from lib import setupDriver
-
-
+from app.utils import setupDriver
+import tomllib
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+from typing import List
+from datetime import datetime
+import uuid6
+import pandas as pd
+import time
+import sqlite3
+import requests
+from app.utils.webpageExtractor import (
+    get_listings_page,
+    extract_listing_links,
+    insert_rows_to_ledger,
+    load_site_config,
+    download_webpage
+)
+import logging
 # %%
-base_url = "https://asunnot.oikotie.fi/vuokra-asunnot?pagination={page}"
+
 driver = setupDriver.setup_driver()
 
 # Initiate the Chromedriver by passing options as argument
 # %%
+def get_last_two_links(card_type, db_path: str = "app/data/listings.sqlite3") -> List[str]:
+    with sqlite3.connect("./app/data/listings.sqlite3") as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT link FROM ledger
+            WHERE page = 1 and cardType = '{card_type}'
+            ORDER BY accessed_at DESC
+            LIMIT 2
+        """)
+        links = [row[0] for row in cur.fetchall()]
+    return links
 
-
-driver.get(base_url.format(page=2))
-WebDriverWait(driver, 10).until(
-    lambda d: d.execute_script("return document.readyState") == "complete"
-)
+def get_unparsed_links(db_path: str = "app/data/listings.sqlite3") -> List[str]:
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT link FROM ledger
+            WHERE parsed = 0 
+        """)
+        links = [row[0] for row in cur.fetchall()]
+    return links
 # %%
-elements = driver.find_elements(By.XPATH, "//a[@href]")
+config = load_site_config()
 
-links = [elem.get_attribute("href") for elem in elements]
+session_config = config["listing_types"]["Vuokrattavat"]["vuokra-asunnot"]
+
+
+
+
+def download_webpage(url: str) -> str:
+    """download webpage
+
+    This function downloads the webpage from the given url.
+
+    Parameters
+    ----------
+    url : str
+        url of the webpage to download
+
+    Returns
+    -------
+    str
+        html content of the webpage
+    """
+    response = requests.get(url)
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"Failed to download webpage: {e}")
+        return ""
+    return response.text
+
 # %%
-
-ads = [s for s in links if s.split("/")[-1].isdigit()]
-
-# %%
-ad_url = ads[0]
-with open(f"data/htmls/{ad_url.split('/')[-1]}.html", mode="w", encoding="utf-8") as f:
-    html_str = requests.get(ad_url).text
-    f.write(html_str)
+unparsed_links = get_unparsed_links()
+for link in unparsed_links:
+    html_str = download_webpage(link)
+    with open(f"app/data/html/cache/{link.split('/')[-1]}.html", "w", encoding="utf-8") as f:
+        f.write(html_str)
 
 # %%
-driver.get(ad_url)
-scripts = driver.find_elements(By.TAG_NAME, 'script')
+import os
+import zipfile
+from pathlib import Path
 
-# Iterate over all to find the one with the target start pattern
-target_script_content = None
-for script in scripts:
-    content = script.get_attribute('innerHTML')
-    if content.strip().startswith('var otAsunnot'):
-        target_script_content = content
-        break
+cache_dir = Path("app/data/html/cache/")
+output_dir = Path("app/data/html")
+output_dir.mkdir(parents=True, exist_ok=True)
 
+zip_path = output_dir / f"{datetime.now().strftime('%Y%m%d')}.zip"
 
-# %%
-metadata = json.loads(target_script_content.replace("var otAsunnot=", "").split(";")[0]).get("analytics")
-# %%
-rows = driver.find_elements(By.CLASS_NAME, "info-table__row")
-table_dict = [
-    convert_xml_row_to_dict(row.get_attribute("innerHTML"), info_type="info-table__")
-    for row in rows[:-1]
-]  # Last item is skkipped because by structure is errored.
-table_dict = {i[0]: i[1] for i in table_dict if i is not None}
+# 1. Create the zip from all html files in cache_dir
+html_files = list(cache_dir.glob("*.html"))
 
-# Grid information is already in the tables.
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+    for html_file in html_files:
+        zf.write(html_file, arcname=html_file.name)  # arcname avoids storing full path
 
-grid_data = driver.find_elements(By.CLASS_NAME, "details-grid__item-text")
-grid_dict = [
-    convert_xml_row_to_dict(
-        row.get_attribute("innerHTML"), info_type="details-grid__item-"
-    )
-    for row in grid_data
-]
+print(f"Zipped {len(html_files)} files to {zip_path}")
+
+# 2. Remove the original html files from cache_dir
+for html_file in html_files:
+    html_file.unlink()
+
+print(f"Removed {len(html_files)} files from {cache_dir}")
 # %%

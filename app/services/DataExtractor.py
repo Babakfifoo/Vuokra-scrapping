@@ -3,7 +3,6 @@ import logging
 import re
 from datetime import date
 from typing import Any, Dict, List
-
 from bs4 import BeautifulSoup, Tag
 
 
@@ -198,7 +197,7 @@ def generate_table_from_html(table_div: Tag) -> Dict[str, Any]:
     return {category_name: results}
 
 
-def get_row_from_HTML(row):
+def get_row_from_HTML(row) -> Dict[str, str] | None:
     key_node = row.find("dt", class_="info-table__title")
     val_node = row.find("dd", class_="info-table__value")
 
@@ -211,8 +210,8 @@ def get_row_from_HTML(row):
             .replace("\t", "")
             .replace("\n", " ")
         )
-    return {key: val}
-
+        return {key: val}
+    return None
 
 def get_ad_description(soup: BeautifulSoup) -> Dict[str, str | List[str]]:
     """Extracting overview text and caption
